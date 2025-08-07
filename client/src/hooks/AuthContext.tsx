@@ -131,11 +131,54 @@ const AuthContextProvider = ({
     loginUser.mutate(data);
   };
 
-  const silentRefresh = useCallback(() => {
+  const silentRefresh = useCallback(async () => {
+    console.log('silentRefresh called');
     if (authConfig?.test === true) {
       console.log('Test mode. Skipping silent refresh.');
       return;
     }
+
+    // First check if authentication is disabled by trying to access a protected endpoint
+    try {
+      console.log('Checking /api/user endpoint...');
+      const response = await fetch('/api/user', {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      console.log('Response status:', response.status, 'OK:', response.ok);
+
+      if (response.ok) {
+        const userData = await response.json();
+        console.log('User data received:', userData);
+
+        if (userData.id === '000000000000000000000000') {
+          // Server has authentication disabled
+          console.log('Authentication disabled, setting anonymous user');
+          setUserContext({
+            token: 'anonymous-token',
+            isAuthenticated: true,
+            user: userData,
+          });
+          return;
+        } else {
+          // Normal authenticated user
+          console.log('Normal authenticated user detected');
+          setUserContext({
+            token: 'existing-token',
+            isAuthenticated: true,
+            user: userData,
+          });
+          return;
+        }
+      } else {
+        console.log('Response not OK, status:', response.status);
+      }
+    } catch (error) {
+      console.log('Direct API check failed, trying refresh token:', error);
+    }
+
+    console.log('Falling back to refresh token...');
     refreshToken.mutate(undefined, {
       onSuccess: (data: t.TRefreshTokenResponse | undefined) => {
         const { user, token = '' } = data ?? {};
@@ -149,7 +192,7 @@ const AuthContextProvider = ({
           navigate('/login');
         }
       },
-      onError: (error) => {
+      onError: (error: any) => {
         console.log('refreshToken mutation error:', error);
         if (authConfig?.test === true) {
           return;

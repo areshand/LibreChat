@@ -7,6 +7,19 @@ const { isEnabled } = require('~/server/utils');
  * Switches between JWT and OpenID authentication based on cookies and environment settings
  */
 const requireJwtAuth = (req, res, next) => {
+  // Check if authentication is disabled
+  if (isEnabled(process.env.DISABLE_AUTH)) {
+    // Create a mock user object for anonymous access with a valid ObjectId
+    req.user = {
+      id: '000000000000000000000000',
+      email: 'anonymous@localhost',
+      username: 'Anonymous User',
+      name: 'Anonymous User',
+      role: 'USER',
+    };
+    return next();
+  }
+
   // Check if token provider is specified in cookies
   const cookieHeader = req.headers.cookie;
   const tokenProvider = cookieHeader ? cookies.parse(cookieHeader).token_provider : null;
