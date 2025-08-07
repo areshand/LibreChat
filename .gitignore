@@ -122,6 +122,11 @@ helm/**/.values.yaml
 # SAML Idp cert
 *.cert
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
 # AI Assistants
 /.claude/
 /.cursor/

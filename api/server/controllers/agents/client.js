@@ -351,13 +351,23 @@ class AgentClient extends BaseClient {
 
     if (mcpServers.length > 0) {
       try {
-        const mcpInstructions = getMCPManager().formatInstructionsForContext(mcpServers);
-        if (mcpInstructions) {
-          systemContent = [systemContent, mcpInstructions].filter(Boolean).join('\n\n');
-          logger.debug('[AgentClient] Injected MCP instructions for servers:', mcpServers);
-        }
+        // Skip MCP instruction injection to prevent payload malformation
+        // This is a temporary fix for the "thinking sequence" error
+        logger.debug(
+          '[AgentClient] Skipping MCP instruction injection to prevent payload issues for servers:',
+          mcpServers,
+        );
+
+        // TODO: Implement proper MCP instruction handling that doesn't cause payload malformation
+        // const mcpInstructions = getMCPManager().formatInstructionsForContext(mcpServers);
+        // if (mcpInstructions) {
+        //   // Add basic server info instead of full instructions
+        //   const serverInfo = `\n\nMCP Servers Available: ${mcpServers.join(', ')}`;
+        //   systemContent = [systemContent, serverInfo].filter(Boolean).join('\n\n');
+        //   logger.debug('[AgentClient] Added basic MCP server info for servers:', mcpServers);
+        // }
       } catch (error) {
-        logger.error('[AgentClient] Failed to inject MCP instructions:', error);
+        logger.error('[AgentClient] Failed to process MCP servers:', error);
       }
     }
 
@@ -749,11 +759,35 @@ class AgentClient extends BaseClient {
       };
 
       const toolSet = new Set((this.options.agent.tools ?? []).map((tool) => tool && tool.name));
-      let { messages: initialMessages, indexTokenCountMap } = formatAgentMessages(
-        payload,
-        this.indexTokenCountMap,
-        toolSet,
-      );
+      let initialMessages, indexTokenCountMap;
+
+      try {
+        ({ messages: initialMessages, indexTokenCountMap } = formatAgentMessages(
+          payload,
+          this.indexTokenCountMap,
+          toolSet,
+        ));
+      } catch (error) {
+        // Handle thinking sequence formatting errors
+        if (error.message && error.message.includes('thinking sequence')) {
+          logger.warn(
+            '[AgentClient] Thinking sequence formatting error, attempting fallback',
+            error.message,
+          );
+
+          // Fallback: use the payload messages directly with basic formatting
+          initialMessages = payload.messages || [];
+          indexTokenCountMap = this.indexTokenCountMap;
+
+          // Ensure we have proper message structure
+          if (initialMessages.length === 0) {
+            throw new Error('No messages available for processing');
+          }
+        } else {
+          // Re-throw other errors
+          throw error;
+        }
+      }
 
       /**
        *
